@@ -22,15 +22,16 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.ParentId, opt => opt.Ignore());
 
         CreateMap<Publication, PublicationDto>()
+            .ForMember(dest => dest.FileUrls, opt => opt.MapFrom(src => src.CloudStoredFiles != null ? src.CloudStoredFiles.Select(f => f.Url) : null))
             .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.Author!.Name))
             .ForMember(dest => dest.AuthorLogo, opt => opt.MapFrom(src => src.Author!.Logo));
 
         CreateMap<Publication, CommentDto>()
             .ForMember(d => d.ParentId, opt => opt.MapFrom(p => p.ParentId!.Value))
-            .ForMember(d => d.CreatedAt, opt => opt.MapFrom(p => p.PostedAt))
+            .ForMember(d => d.CreatedAt, opt => opt.MapFrom(p => p.CreatedAt))
             .ForMember(d => d.AuthorName, opt => opt.MapFrom(p => p.Author!.Name))
             .ForMember(d => d.AuthorLogo, opt => opt.MapFrom(p => p.Author!.Logo))
-            .ForMember(d => d.Image64, opt => opt.MapFrom(p => p.Image64));
+            .ForMember(d => d.FileUrls, opt => opt.MapFrom(p => p.CloudStoredFiles != null ? p.CloudStoredFiles.Select(f => f.Url) : null));
 
         CreateMap<Like, LikeDto>()
             .ForMember(dest => dest.PublicationId,
@@ -42,16 +43,16 @@ public class MappingProfile : Profile
             .ForMember(d => d.UserId, o => o.MapFrom(u => u.Id))
             .ForMember(d => d.Name, o => o.MapFrom(u => u.Name))
             .ForMember(d => d.Logo, o => o.MapFrom(u => u.Logo))
-            .ForMember(d => d.PublicationIds,
-                       o => o.MapFrom(u => u.Publications
-                                           .Where(p => p.AuthorId == u.Id)
-                                           .Select(p => p.Id)));
+            .ForMember(d => d.PublicationIds, o => o.MapFrom(u =>
+                u.Publications != null
+                    ? u.Publications.Select(p => p.Id).ToList()
+                    : new List<Guid>()));
 
         CreateMap<CommentCreateRequest, Publication>()
             .ForMember(dest => dest.AuthorId, opt => opt.MapFrom(src => src.AuthorId))
             .ForMember(dest => dest.ParentId, opt => opt.MapFrom(src => src.PublicationId))
-            .ForMember(dest => dest.Content, opt => opt.MapFrom(src => src.Content))
-            .ForMember(dest => dest.Image64, opt => opt.MapFrom(src => src.Image64))
-            .ForMember(dest => dest.PostedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
+            .ForMember(dest => dest.Description, opt => opt.MapFrom(src => src.Content))
+
+            .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(_ => DateTime.UtcNow));
     }
 }

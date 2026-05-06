@@ -20,7 +20,7 @@ namespace AltWirePoint.WebApi;
 
 public class Program
 {
-    public static void Main(string[] args)
+    public static async Task Main(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
 
@@ -49,14 +49,19 @@ public class Program
 
         builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 
+        #region Repositories
         builder.Services.AddScoped(typeof(IEntityRepository<,>), typeof(EntityRepository<,>));
+        #endregion
 
         // Register the Permission policy handler
         builder.Services.AddSingleton<IAuthorizationPolicyProvider, AuthorizationPolicyProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
+        #region Services
         builder.Services.AddTransient<IJwtService, JwtService>();
+        builder.Services.AddScoped<ICloudStoredFileService, CloudStoredFileService>();
         builder.Services.AddScoped<IPublicationService, PublicationService>();
+        #endregion
 
         builder.Services.AddAutoMapper(typeof(MappingProfile));
 
@@ -116,6 +121,21 @@ public class Program
         });
 
         var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            try
+            {
+                var storageService = scope.ServiceProvider.GetRequiredService<ICloudStoredFileService>();
+                await storageService.InitializeContainerAsync();
+            }
+            catch (Exception ex)
+            {
+                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                logger.LogError(ex, "An error occurred while initializing Azure Blob Storage.");
+
+            }
+        }
 
         app.UseCors("CorsPolicy");
 

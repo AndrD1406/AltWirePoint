@@ -11,5 +11,5 @@ public class CommentCreateRequest
     public Guid AuthorId { get; set; }
 
     public string? Content { get; set; }
-    public string? Image64 { get; set; }
+
 }

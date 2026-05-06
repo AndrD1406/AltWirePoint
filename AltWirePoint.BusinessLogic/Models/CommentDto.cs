@@ -8,7 +8,7 @@ public class CommentDto
 
     public DateTime CreatedAt { get; set; }
 
-    public string Image64 { get; set; }
+    public List<string>? FileUrls { get; set; }
 
     public string Content { get; set; }
 

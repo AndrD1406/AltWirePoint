@@ -5,49 +5,50 @@ using System.Linq.Expressions;
 namespace AltWirePoint.DataAccess.Repository.Base;
 
 public interface IEntityRepository<TKey, TEntity>
-where TEntity : class, IKeyedEntity<TKey>, new()
-where TKey : IEquatable<TKey>
+    where TEntity : class, IKeyedEntity<TKey>, new()
+    where TKey : IEquatable<TKey>
 {
-    public Task<TEntity> Create(TEntity entity);
+    Task<TEntity> Create(TEntity entity);
 
-    public Task<IEnumerable<TEntity>> Create(IEnumerable<TEntity> entities);
+    Task<IEnumerable<TEntity>> Create(IEnumerable<TEntity> entities);
 
-    public Task<T> RunInTransaction<T>(Func<Task<T>> operation);
+    Task<TEntity> Update(TEntity entity);
 
-    public Task RunInTransaction(Func<Task> operation);
-
-    public Task Delete(TEntity entity);
-
-    public Task<IEnumerable<TEntity>> GetAll();
-
-    public Task<IEnumerable<TEntity>> GetAllWithDetails(string includeProperties = "");
-
-    public Task<IEnumerable<TEntity>> GetByFilter(Expression<Func<TEntity, bool>> whereExpression, string includeProperties = "");
-
-    public IQueryable<TEntity> GetByFilterNoTracking(Expression<Func<TEntity, bool>> whereExpression, string includeProperties = "");
-
-    public Task<TEntity> GetById(TKey id);
-
-    public Task<TEntity> GetByIdWithDetails(TKey id, string includeProperties = "");
-
-    public Task<TEntity> Update(TEntity entity);
-
-    public Task<TEntity> ReadAndUpdateWith<TDto>(TDto dto, Func<TDto, TEntity, TEntity> map)
+    Task<TEntity> ReadAndUpdateWith<TDto>(TDto dto, Func<TDto, TEntity, TEntity> map)
         where TDto : IDto<TEntity, TKey>;
 
-    public IQueryable<TEntity> Get(
+    Task Delete(TEntity entity);
+
+    Task<T> RunInTransaction<T>(Func<Task<T>> operation);
+
+    Task RunInTransaction(Func<Task> operation);
+
+    Task<TEntity> GetById(TKey id);
+
+    Task<TEntity> GetByIdWithDetails(
+        TKey id,
+        string includeProperties = "",
+        Func<IQueryable<TEntity>, IQueryable<TEntity>> includeExpression = null);
+
+    IQueryable<TEntity> GetByFilter(
+        Expression<Func<TEntity, bool>> whereExpression,
+        string includeProperties = "",
+        Func<IQueryable<TEntity>, IQueryable<TEntity>> includeExpression = null);
+
+    IQueryable<TEntity> Get(
         int skip = 0,
         int take = 0,
         string includeProperties = "",
         Expression<Func<TEntity, bool>> whereExpression = null,
-        Dictionary<Expression<Func<TEntity, object>>, SortDirection> orderBy = null,
-        bool asNoTracking = false);
+        // Changed from IDictionary to IEnumerable of ValueTuples
+        IEnumerable<(Expression<Func<TEntity, object>> Key, SortDirection Direction)> orderBy = null
+    );
 
-    public Task<bool> Any(Expression<Func<TEntity, bool>> whereExpression = null);
+    Task<int> Count(Expression<Func<TEntity, bool>> whereExpression = null);
 
-    public Task<int> Count(Expression<Func<TEntity, bool>> whereExpression = null);
+    Task<bool> Any(Expression<Func<TEntity, bool>> whereExpression = null);
 
-    public Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess = true, CancellationToken cancellationToken = default);
+    Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess = true, CancellationToken cancellationToken = default);
 
-    public int SaveChanges(bool acceptAllChangesOnSuccess = true);
+    int SaveChanges(bool acceptAllChangesOnSuccess = true);
 }

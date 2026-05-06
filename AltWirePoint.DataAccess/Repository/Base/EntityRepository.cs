@@ -2,7 +2,6 @@
 using AltWirePoint.DataAccess.Extensions;
 using AltWirePoint.DataAccess.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using System.Linq.Expressions;
 
 namespace AltWirePoint.DataAccess.Repository.Base;
@@ -11,46 +10,46 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
     where TEntity : class, IKeyedEntity<TKey>, new()
     where TKey : IEquatable<TKey>
 {
-    public readonly AltWirePointDbContext dbContext;
-    public readonly DbSet<TEntity> dbSet;
+    protected readonly AltWirePointDbContext dbContext;
+    protected readonly DbSet<TEntity> dbSet;
 
-    public EntityRepository(AltWirePointDbContext dbContext) : base()
+    public EntityRepository(AltWirePointDbContext dbContext)
     {
         this.dbContext = dbContext;
         dbSet = this.dbContext.Set<TEntity>();
     }
 
-    public async Task<TEntity> Create(TEntity entity)
+    public virtual async Task<TEntity> Create(TEntity entity)
     {
         await dbSet.AddAsync(entity).ConfigureAwait(false);
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        return await Task.FromResult(entity).ConfigureAwait(false);
+        return entity;
     }
 
-    public async Task<IEnumerable<TEntity>> Create(IEnumerable<TEntity> entities)
+    public virtual async Task<IEnumerable<TEntity>> Create(IEnumerable<TEntity> entities)
     {
         await dbSet.AddRangeAsync(entities).ConfigureAwait(false);
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
 
-        return await Task.FromResult(entities).ConfigureAwait(false);
+        return entities;
     }
 
-    public async Task<T> RunInTransaction<T>(Func<Task<T>> operation)
+    public virtual async Task<T> RunInTransaction<T>(Func<Task<T>> operation)
     {
         var executionStrategy = dbContext.Database.CreateExecutionStrategy();
 
         return await executionStrategy.ExecuteAsync(
             async () =>
             {
-                await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync().ConfigureAwait(false);
                 try
                 {
                     var result = await operation().ConfigureAwait(false);
                     await transaction.CommitAsync().ConfigureAwait(false);
                     return result;
                 }
-                catch (Exception ex)
+                catch
                 {
                     await transaction.RollbackAsync().ConfigureAwait(false);
                     throw;
@@ -58,20 +57,20 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
             });
     }
 
-    public async Task RunInTransaction(Func<Task> operation)
+    public virtual async Task RunInTransaction(Func<Task> operation)
     {
         var executionStrategy = dbContext.Database.CreateExecutionStrategy();
 
         await executionStrategy.ExecuteAsync(
             async () =>
             {
-                await using IDbContextTransaction transaction = await dbContext.Database.BeginTransactionAsync();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync().ConfigureAwait(false);
                 try
                 {
                     await operation().ConfigureAwait(false);
                     await transaction.CommitAsync().ConfigureAwait(false);
                 }
-                catch (Exception ex)
+                catch
                 {
                     await transaction.RollbackAsync().ConfigureAwait(false);
                     throw;
@@ -79,51 +78,45 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
             });
     }
 
-    public async Task Delete(TEntity entity)
+    public virtual async Task Delete(TEntity entity)
     {
         dbContext.Entry(entity).State = EntityState.Deleted;
-
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
     }
 
-    public async Task<IEnumerable<TEntity>> GetAll()
+    public virtual IQueryable<TEntity> GetByFilter(
+        Expression<Func<TEntity, bool>> whereExpression,
+        string includeProperties = "",
+        Func<IQueryable<TEntity>, IQueryable<TEntity>> includeExpression = null)
     {
-        return await dbSet.ToListAsync().ConfigureAwait(false);
+        IQueryable<TEntity> query = dbSet.Where(whereExpression);
+
+        if (includeExpression != null)
+            query = includeExpression(query);
+
+        return query.IncludeProperties(includeProperties);
     }
 
-    public async Task<IEnumerable<TEntity>> GetAllWithDetails(string includeProperties = "")
-        => await dbSet
-        .IncludeProperties(includeProperties)
-        .ToListAsync();
+    public virtual Task<TEntity> GetById(TKey id) =>
+        dbSet.FirstOrDefaultAsync(x => x.Id.Equals(id));
 
-    public async Task<IEnumerable<TEntity>> GetByFilter(
-        Expression<Func<TEntity, bool>> whereExpression,
-        string includeProperties = "")
-        => await this.dbSet
-        .Where(whereExpression)
-        .IncludeProperties(includeProperties)
-        .ToListAsync()
-        .ConfigureAwait(false);
+    public virtual Task<TEntity> GetByIdWithDetails(
+        TKey id,
+        string includeProperties = "",
+        Func<IQueryable<TEntity>, IQueryable<TEntity>> includeExpression = null)
+    {
+        var query = dbSet.Where(x => x.Id.Equals(id));
 
-    public IQueryable<TEntity> GetByFilterNoTracking(
-        Expression<Func<TEntity, bool>> whereExpression,
-        string includeProperties = "")
-        => this.dbSet
-        .Where(whereExpression)
-        .IncludeProperties(includeProperties)
-        .AsNoTracking();
+        if (includeExpression != null)
+            query = includeExpression(query);
 
-    public Task<TEntity> GetById(TKey id) => dbSet.FirstOrDefaultAsync(x => x.Id.Equals(id));
+        return query.IncludeProperties(includeProperties).FirstOrDefaultAsync();
+    }
 
-    public Task<TEntity> GetByIdWithDetails(TKey id, string includeProperties = "")
-        => dbSet.Where(x => x.Id.Equals(id)).IncludeProperties(includeProperties).FirstOrDefaultAsync();
-
-    public async Task<TEntity> Update(TEntity entity)
+    public virtual async Task<TEntity> Update(TEntity entity)
     {
         dbContext.Entry(entity).State = EntityState.Modified;
-
         await dbContext.SaveChangesAsync().ConfigureAwait(false);
-
         return entity;
     }
 
@@ -132,15 +125,28 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
     {
         ArgumentNullException.ThrowIfNull(dto);
 
-        var entity = await this.GetById(dto.Id).ConfigureAwait(false);
+        var entity = await GetById(dto.Id).ConfigureAwait(false);
 
         if (entity is null)
         {
-            var name = typeof(TEntity).Name;
-            throw new DbUpdateConcurrencyException($"Updating failed. {name} with Id = {dto.Id} doesn't exist in the system.");
+            throw new DbUpdateConcurrencyException($"Update failed. {typeof(TEntity).Name} with Id = {dto.Id} not found.");
         }
 
-        return await this.Update(map(dto, entity)).ConfigureAwait(false);
+        return await Update(map(dto, entity)).ConfigureAwait(false);
+    }
+
+    public virtual Task<int> Count(Expression<Func<TEntity, bool>> whereExpression = null)
+    {
+        return whereExpression == null
+            ? dbSet.CountAsync()
+            : dbSet.CountAsync(whereExpression);
+    }
+
+    public virtual Task<bool> Any(Expression<Func<TEntity, bool>> whereExpression = null)
+    {
+        return whereExpression == null
+            ? dbSet.AnyAsync()
+            : dbSet.AnyAsync(whereExpression);
     }
 
     public virtual IQueryable<TEntity> Get(
@@ -148,58 +154,39 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
         int take = 0,
         string includeProperties = "",
         Expression<Func<TEntity, bool>> whereExpression = null,
-        Dictionary<Expression<Func<TEntity, object>>, SortDirection> orderBy = null,
-        bool asNoTracking = false)
+        IEnumerable<(Expression<Func<TEntity, object>> Key, SortDirection Direction)> orderBy = null)
     {
         IQueryable<TEntity> query = dbSet;
+
         if (whereExpression != null)
-        {
             query = query.Where(whereExpression);
-        }
 
-        if ((orderBy != null) && orderBy.Any())
+        if (orderBy != null && orderBy.Any())
         {
-            var orderedData = orderBy.Values.First() == SortDirection.Ascending
-                ? query.OrderBy(orderBy.Keys.First())
-                : query.OrderByDescending(orderBy.Keys.First());
+            IOrderedQueryable<TEntity> orderedData = null;
 
-            foreach (var expression in orderBy.Skip(1))
+            foreach (var sort in orderBy)
             {
-                orderedData = expression.Value == SortDirection.Ascending
-                    ? orderedData.ThenBy(expression.Key)
-                    : orderedData.ThenByDescending(expression.Key);
+                if (orderedData == null)
+                {
+                    orderedData = sort.Direction == SortDirection.Ascending
+                        ? query.OrderBy(sort.Key)
+                        : query.OrderByDescending(sort.Key);
+                }
+                else
+                {
+                    orderedData = sort.Direction == SortDirection.Ascending
+                        ? orderedData.ThenBy(sort.Key)
+                        : orderedData.ThenByDescending(sort.Key);
+                }
             }
-
             query = orderedData;
         }
 
-        if (skip > 0)
-        {
-            query = query.Skip(skip);
-        }
+        if (skip > 0) query = query.Skip(skip);
+        if (take > 0) query = query.Take(take);
 
-        if (take > 0)
-        {
-            query = query.Take(take);
-        }
-
-        query = query.IncludeProperties(includeProperties);
-
-        return query.If(asNoTracking, q => q.AsNoTracking());
-    }
-
-    public Task<bool> Any(Expression<Func<TEntity, bool>> whereExpression = null)
-    {
-        return whereExpression == null
-            ? dbSet.AnyAsync()
-            : dbSet.Where(whereExpression).AnyAsync();
-    }
-
-    public Task<int> Count(Expression<Func<TEntity, bool>> whereExpression = null)
-    {
-        return whereExpression == null
-            ? dbSet.CountAsync()
-            : dbSet.Where(whereExpression).CountAsync();
+        return query;
     }
 
     public Task<int> SaveChangesAsync(

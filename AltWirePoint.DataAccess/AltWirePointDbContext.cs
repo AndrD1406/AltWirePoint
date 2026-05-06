@@ -15,6 +15,8 @@ public partial class AltWirePointDbContext : IdentityDbContext<ApplicationUser, 
 
     public virtual DbSet<PermissionsForRole> PermissionsForRoles { get; set; }
 
+    public virtual DbSet<CloudStoredFile> CloudStoredFiles { get; set; }
+
     public AltWirePointDbContext(DbContextOptions<AltWirePointDbContext> options)
         : base(options)
     {
