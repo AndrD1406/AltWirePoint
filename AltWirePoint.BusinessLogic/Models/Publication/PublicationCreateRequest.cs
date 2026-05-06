@@ -2,7 +2,5 @@
 
 public class PublicationCreateRequest
 {
-    public string? Content { get; set; }
-
-    public string? Image64 { get; set; }
+    public string? Description { get; set; }
 }

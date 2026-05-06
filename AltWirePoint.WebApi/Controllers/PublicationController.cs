@@ -2,8 +2,6 @@
 using AltWirePoint.BusinessLogic.Models.Profile;
 using AltWirePoint.BusinessLogic.Models.Publication;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
-using AltWirePoint.Common.PermissionManagement;
-using AltWirePoint.Common.PermissionModule.PolicyClasses;
 using AltWirePoint.DataAccess.Identity;
 using AltWirePoint.DataAccess.Models;
 using AutoMapper;
@@ -33,18 +31,33 @@ public class PublicationController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(Publication), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] PublicationCreateRequest publication)
+    public async Task<IActionResult> Create([FromForm] PublicationCreateRequest request, [FromForm] List<IFormFile> files)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
             return Unauthorized();
 
-        var created = await publicationService.Create(publication, Guid.Parse(userId));
+        var fileDtos = new List<FileUploadDto>();
+        if (files != null)
+        {
+            foreach (var file in files)
+            {
+                fileDtos.Add(new FileUploadDto
+                {
+                    Content = file.OpenReadStream(),
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    Length = file.Length
+                });
+            }
+        }
+
+        var publication = await publicationService.Create(request, Guid.Parse(userId), fileDtos);
 
         return CreatedAtAction(
             nameof(GetById),
-            new { id = created.Id },
-            created
+            new { id = publication.Id },
+            publication
         );
     }
 
@@ -58,24 +71,6 @@ public class PublicationController : ControllerBase
             return NotFound();
 
         return Ok(publication);
-    }
-
-    [HttpGet]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<Publication>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> Get()
-    {
-        var publications = await publicationService.GetAll();
-        return Ok(publications);
-    }
-
-    [HttpGet()]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(IEnumerable<PublicationDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWithDetails()
-    {
-        var dtos = await publicationService.GetAllWithDetails();
-        return Ok(dtos);
     }
 
     [HttpPut]
@@ -94,11 +89,11 @@ public class PublicationController : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<PublicationDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetByUserId(Guid id)
+    [ProducesResponseType(typeof(int), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPulicationCountByAuthor(Guid id)
     {
-        var publications = await this.publicationService.GetPublicationsByAuthor(id);
-        return Ok(publications);
+        var publicationsCount = await publicationService.GetPublicationCountByAuthor(id);
+        return Ok(publicationsCount);
     }
 
     [HttpGet]
@@ -120,16 +115,31 @@ public class PublicationController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(CommentDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Comment([FromBody] CommentCreateRequest dto)
+    public async Task<IActionResult> Comment([FromForm] CommentCreateRequest request, [FromForm] List<IFormFile> files)
     {
-        var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (userIdStr == null || !Guid.TryParse(userIdStr, out var currentUserId))
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null || !Guid.TryParse(userId, out var currentUserId))
             return Unauthorized();
 
-        if (dto.AuthorId != currentUserId)
+        if (request.AuthorId != currentUserId)
             return Forbid();
 
-        var comment = await publicationService.AddComment(dto);
+        var fileDtos = new List<FileUploadDto>();
+        if (files != null)
+        {
+            foreach (var file in files)
+            {
+                fileDtos.Add(new FileUploadDto
+                {
+                    Content = file.OpenReadStream(),
+                    FileName = file.FileName,
+                    ContentType = file.ContentType,
+                    Length = file.Length
+                });
+            }
+        }
+
+        var comment = await publicationService.AddComment(request, fileDtos);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -141,11 +151,11 @@ public class PublicationController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<PublicationDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetWithDetailsPaged(
+    public async Task<IActionResult> Get(
     [FromQuery] int skip = 0,
     [FromQuery] int take = 10)
     {
-        var page = await publicationService.GetWithDetailsPaged(skip, take);
+        var page = await publicationService.Get(skip, take);
         return Ok(page);
     }
 

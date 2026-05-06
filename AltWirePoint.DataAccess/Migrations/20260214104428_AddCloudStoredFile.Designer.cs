@@ -3,6 +3,7 @@ using System;
 using AltWirePoint.DataAccess;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AltWirePoint.DataAccess.Migrations
 {
     [DbContext(typeof(AltWirePointDbContext))]
-    partial class AltWirePointDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260214104428_AddCloudStoredFile")]
+    partial class AddCloudStoredFile
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

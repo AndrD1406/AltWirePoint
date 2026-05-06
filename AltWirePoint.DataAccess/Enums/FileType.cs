@@ -1,7 +1,7 @@
 ﻿namespace AltWirePoint.DataAccess.Enums;
 
-public enum Role
+public enum FileType
 {
-    User,
-    Admin
+    Image,
+    Video
 }

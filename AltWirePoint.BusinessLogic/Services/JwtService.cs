@@ -11,6 +11,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace AltWirePoint.BusinessLogic.Services;
 
@@ -32,10 +33,9 @@ public class JwtService : IJwtService
     public async Task<AuthenticationResponse> CreateJwtToken(ApplicationUser user)
     {
         // Get the permissions for this specific role
-        var roles = await permissionsRepository
-            .GetByFilter(p => p.RoleName == user.Role);
-
-        var rolePermissions = roles.FirstOrDefault();
+        var rolePermissions = await permissionsRepository
+            .GetByFilter(p => p.RoleName == user.Role)
+            .FirstOrDefaultAsync();
 
         // Default to empty if role not found (or handle as error depending on preference)
         var packedPermissions = rolePermissions?.PackedPermissions ?? string.Empty;

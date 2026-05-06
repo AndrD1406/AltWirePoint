@@ -14,37 +14,48 @@ public class PublicationService : IPublicationService
 {
     private readonly IEntityRepository<Guid, Publication> publicationRepository;
     private readonly IEntityRepository<Guid, Like> likeRepository;
+    private readonly ICloudStoredFileService cloudStoredFileService;
     private readonly IMapper mapper;
 
     public PublicationService(
         IEntityRepository<Guid, Publication> publicationRepository,
         IEntityRepository<Guid, Like> likeRepository,
+        ICloudStoredFileService cloudStoredFileService,
         IMapper mapper)
     {
         this.publicationRepository = publicationRepository;
         this.likeRepository = likeRepository;
+        this.cloudStoredFileService = cloudStoredFileService;
         this.mapper = mapper;
     }
 
-    public async Task<PublicationDto> Create(PublicationCreateRequest dto, Guid authorId)
+    public async Task<PublicationDto> Create(PublicationCreateRequest request, Guid authorId, IEnumerable<FileUploadDto> files)
     {
-        var publication = mapper.Map<Publication>(dto);
+        var publication = mapper.Map<Publication>(request);
         publication.AuthorId = authorId;
-        publication.PostedAt = DateTime.UtcNow;
+        publication.CreatedAt = DateTime.UtcNow;
+        publication.CloudStoredFiles = new List<CloudStoredFile>();
+
+        if (files != null)
+        {
+            var uploadTasks = files.Select(async file =>
+            {
+                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType);
+                return storedFile;
+            });
+
+            var storedFiles = await Task.WhenAll(uploadTasks);
+            publication.CloudStoredFiles.AddRange(storedFiles);
+        }
+
         var created = await publicationRepository.Create(publication);
         return mapper.Map<PublicationDto>(created);
     }
 
     public async Task<PublicationDto> GetById(Guid id)
     {
-        var pub = await publicationRepository.GetById(id);
-        return mapper.Map<PublicationDto>(pub);
-    }
-
-    public async Task<IEnumerable<PublicationDto>> GetAll()
-    {
-        var publications = await publicationRepository.GetAll();
-        return mapper.Map<IEnumerable<PublicationDto>>(publications);
+        var publication = await publicationRepository.GetById(id);
+        return mapper.Map<PublicationDto>(publication);
     }
 
     public async Task<LikeDto> GetLikeById(Guid id)
@@ -55,29 +66,29 @@ public class PublicationService : IPublicationService
 
     public async Task<IEnumerable<LikeDto>> GetLikesForPublication(Guid publicationId)
     {
-        var likes = (await likeRepository.GetAll())
-            .Where(l => l.PublicationId == publicationId);
+        var likes = await likeRepository
+            .GetByFilter(l => l.PublicationId == publicationId).ToListAsync();
         return mapper.Map<IEnumerable<LikeDto>>(likes);
     }
 
     public async Task<IEnumerable<CommentDto>> GetCommentsForPublication(Guid publicationId)
     {
-        var comments = (await publicationRepository.GetAll())
-            .Where(p => p.ParentId == publicationId);
+        var comments = await publicationRepository
+            .GetByFilter(p => p.ParentId == publicationId)
+            .AsNoTracking().ToListAsync();
         return mapper.Map<IEnumerable<CommentDto>>(comments);
     }
 
-    public async Task<IEnumerable<PublicationDto>> GetPublicationsByAuthor(Guid authorId)
+    public async Task<int> GetPublicationCountByAuthor(Guid authorId)
     {
-        var pubs = (await publicationRepository.GetAll())
-            .Where(p => p.AuthorId == authorId && p.ParentId == null);
-        return mapper.Map<IEnumerable<PublicationDto>>(pubs);
+        return await publicationRepository.Count(p => p.AuthorId == authorId && p.ParentId == null);
     }
 
     public async Task<IEnumerable<PublicationDto>> GetReplies(Guid parentId)
     {
-        var replies = (await publicationRepository.GetAll())
-            .Where(p => p.ParentId == parentId);
+        var replies = await publicationRepository
+            .GetByFilter(p => p.ParentId == parentId)
+            .AsNoTracking().ToListAsync();
         return mapper.Map<IEnumerable<PublicationDto>>(replies);
     }
 
@@ -92,13 +103,21 @@ public class PublicationService : IPublicationService
     public async Task Delete(Guid id)
     {
         var publicationToDelete = await this.publicationRepository.GetById(id);
+        
+        if (publicationToDelete.CloudStoredFiles != null && publicationToDelete.CloudStoredFiles.Any())
+        {
+            foreach (var file in publicationToDelete.CloudStoredFiles)
+            {
+                await cloudStoredFileService.DeleteFileAsync(file.Url);
+            }
+        }
 
         await publicationRepository.Delete(publicationToDelete);
     }
 
     public async Task<LikeDto> SetLike(Guid publicationId, Guid authorId)
     {
-        var existing = (await likeRepository.GetAll())
+        var existing = (await likeRepository.Get().ToListAsync())
             .FirstOrDefault(l
                 => l.PublicationId == publicationId
                 && l.AuthorId == authorId);
@@ -122,86 +141,45 @@ public class PublicationService : IPublicationService
     }
 
     public async Task<IEnumerable<LikeDto>> GetAllLikes()
-    => mapper.Map<IEnumerable<LikeDto>>(await likeRepository.GetAll());
+    => mapper.Map<IEnumerable<LikeDto>>(await likeRepository.Get().ToListAsync());
 
-    public async Task<IEnumerable<PublicationDto>> GetAllWithDetails()
+    public async Task<CommentDto> AddComment(CommentCreateRequest request, IEnumerable<FileUploadDto> files)
     {
-        var publications = await publicationRepository.GetAll();
+        var commentEntity = mapper.Map<Publication>(request);
+        commentEntity.CloudStoredFiles = new List<CloudStoredFile>();
 
-        var allLikes = (await likeRepository.GetAll())
-            .Select(l => mapper.Map<LikeDto>(l))
-            .ToLookup(l => l.PublicationId);
-
-        var allComments = publications
-            .Where(p => p.ParentId.HasValue)
-            .Select(p => mapper.Map<CommentDto>(p))
-            .ToLookup(c => c.ParentId);
-
-        var result = publications.Select(pub =>
+        if (files != null)
         {
-            var dto = mapper.Map<PublicationDto>(pub);
-            dto.Likes = allLikes[pub.Id].ToList();
-            dto.Comments = allComments[pub.Id].ToList();
-            return dto;
-        });
+            var uploadTasks = files.Select(async file =>
+            {
+                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType);
+                storedFile.PublicationId = commentEntity.Id;
+                return storedFile;
+            });
 
-        return result;
-    }
-
-    public async Task<CommentDto> AddComment(CommentCreateRequest dto)
-    {
-        var commentEntity = mapper.Map<Publication>(dto);
+            var storedFiles = await Task.WhenAll(uploadTasks);
+            commentEntity.CloudStoredFiles.AddRange(storedFiles);
+        }
 
         var created = await publicationRepository.Create(commentEntity);
 
         return mapper.Map<CommentDto>(created);
     }
 
-    private async Task<IEnumerable<PublicationDto>> MapWithLikesAndComments(
-        List<Publication> pageEntities)
-    {
-        var dtos = pageEntities.Select(mapper.Map<PublicationDto>).ToList();
-
-        var allLikes = (await likeRepository.GetAll())
-            .Select(mapper.Map<LikeDto>)
-            .Where(l => pageEntities.Select(p => p.Id).Contains(l.PublicationId))
-            .ToLookup(l => l.PublicationId);
-
-        var commentEntities = await publicationRepository
-        .GetByFilterNoTracking(
-            p => p.ParentId.HasValue
-                 && pageEntities.Select(x => x.Id).Contains(p.ParentId.Value),
-            includeProperties: nameof(Publication.Author)
-        )
-        .ToListAsync();
-
-        var allComments = commentEntities
-            .Select(mapper.Map<CommentDto>)
-            .ToLookup(c => c.ParentId);
-
-        foreach (var dto in dtos)
-        {
-            dto.Likes = allLikes[dto.Id].Where(l => l.IsLiked).ToList();
-            dto.Comments = allComments[dto.Id].ToList();
-        }
-
-        return dtos;
-    }
-
-    public async Task<IEnumerable<PublicationDto>> GetWithDetailsPaged(int skip, int take)
+    public async Task<IEnumerable<PublicationDto>> Get(int skip, int take)
     {
         var pageEntities = await publicationRepository
             .Get(
                 skip: skip,
                 take: take,
-                includeProperties: nameof(Publication.Author),
+                includeProperties: $"{nameof(Publication.Author)},{nameof(Publication.CloudStoredFiles)}",
                 whereExpression: p => p.ParentId == null,
-                orderBy: new Dictionary<Expression<Func<Publication, object>>, SortDirection>
+                orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
-                    { p => p.PostedAt, SortDirection.Descending }
-                },
-                asNoTracking: true
+                    (p => p.CreatedAt, SortDirection.Descending)
+                }
             )
+            .AsNoTracking()
             .ToListAsync();
 
         return await MapWithLikesAndComments(pageEntities);
@@ -214,14 +192,14 @@ public class PublicationService : IPublicationService
             .Get(
                 skip: skip,
                 take: take,
-                includeProperties: nameof(Publication.Author),
+                includeProperties: $"{nameof(Publication.Author)},{nameof(Publication.CloudStoredFiles)}",
                 whereExpression: p => p.ParentId == null && p.AuthorId == authorId,
-                orderBy: new Dictionary<Expression<Func<Publication, object>>, SortDirection>
+                orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
-                    { p => p.PostedAt, SortDirection.Descending }
-                },
-                asNoTracking: true
+                    (p => p.CreatedAt, SortDirection.Descending)
+                }
             )
+            .AsNoTracking()
             .ToListAsync();
 
         return await MapWithLikesAndComments(pageEntities);
@@ -229,25 +207,72 @@ public class PublicationService : IPublicationService
 
     public async Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount)
     {
-        var lowerQuery = (query ?? string.Empty).ToLower();
+        var searchPattern = $"%{query}";
 
         var entities = await publicationRepository
             .Get(
                 skip: skipCount,
                 take: maxResultCount,
-                whereExpression: p => p.Content.ToLower().Contains(lowerQuery),
-                orderBy: new Dictionary<Expression<Func<Publication, object>>, SortDirection>
+                includeProperties: nameof(Publication.CloudStoredFiles),
+                whereExpression: p => p.Description != null && EF.Functions.ILike(p.Description, searchPattern),
+                orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
-                { p => p.PostedAt, SortDirection.Descending }
-                })
+                    (p => p.CreatedAt, SortDirection.Descending)
+                }
+            )
+            .AsNoTracking()
             .ToListAsync();
 
-        // 3) map to DTOs
         return entities
-            .Select(p => mapper.Map<PublicationDto>(p))
-            .ToList();
+            .Select(p => mapper.Map<PublicationDto>(p));
     }
 
+    private async Task<IEnumerable<PublicationDto>> MapWithLikesAndComments(
+        List<Publication> pageEntities)
+    {
+        // Map basic publication details first
+        var dtos = pageEntities.Select(mapper.Map<PublicationDto>).ToList();
+
+        // Get all publication IDs for the current page
+        var publicationIds = pageEntities.Select(p => p.Id).ToList();
+
+        // Get all likes for the publications in the current page
+        var relatedLikes = await likeRepository
+            .GetByFilter(l => publicationIds.Contains(l.PublicationId))
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Map likes to a lookup for quick access
+        var allLikesLookup = relatedLikes
+            .Select(mapper.Map<LikeDto>)
+            .ToLookup(l => l.PublicationId);
+
+        // Get all comments for the publications in the current page
+        var relatedComments = await publicationRepository
+            .GetByFilter(p => p.ParentId.HasValue && publicationIds.Contains(p.ParentId.Value),
+                includeProperties: nameof(Publication.Author))
+            .AsNoTracking()
+            .ToListAsync();
+
+        // Map comments to a lookup for quick access
+        var allCommentsLookup = relatedComments
+            .Select(mapper.Map<CommentDto>)
+            .ToLookup(c => c.ParentId);
+
+        // Assign likes and comments to the resulting list
+        foreach (var dto in dtos)
+        {
+            dto.Likes = allLikesLookup.Contains(dto.Id)
+                ? allLikesLookup[dto.Id].ToList()
+                : new List<LikeDto>();
+
+            dto.Comments = allCommentsLookup.Contains(dto.Id)
+                ? allCommentsLookup[dto.Id].ToList()
+                : new List<CommentDto>();
+        }
+
+        return dtos;
+    }
 }
 
 

@@ -3,11 +3,12 @@
 public class PublicationDto
 {
     public Guid Id { get; set; }
-    public string? Content { get; set; }
 
-    public string? Image64 { get; set; }
+    public string? Description { get; set; }
 
-    public DateTime PostedAt { get; set; }
+    public List<string>? FileUrls { get; set; }
+
+    public DateTime CreatedAt { get; set; }
 
     public Guid AuthorId { get; set; }
 
