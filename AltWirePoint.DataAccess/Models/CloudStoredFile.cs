@@ -1,4 +1,5 @@
 using AltWirePoint.DataAccess.Enums;
+using AltWirePoint.DataAccess.Identity;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace AltWirePoint.DataAccess.Models;
@@ -16,7 +17,12 @@ public class CloudStoredFile
     public long FileSize { get; set; }
 
     [ForeignKey(nameof(Publication))]
-    public Guid PublicationId { get; set; }
+    public Guid? PublicationId { get; set; }
 
-    public virtual Publication Publication { get; set; } = null!;
+    public virtual Publication? Publication { get; set; }
+
+    [ForeignKey(nameof(ApplicationUser))]
+    public Guid? ApplicationUserId { get; set; }
+
+    public virtual ApplicationUser? ApplicationUser { get; set; }
 }

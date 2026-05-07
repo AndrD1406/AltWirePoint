@@ -8,24 +8,34 @@ namespace AltWirePoint.BusinessLogic.Services;
 
 public class CloudStoredFileService : ICloudStoredFileService
 {
-    private readonly BlobContainerClient containerClient;
-    private const string ContainerName = "publications";
+    private readonly BlobServiceClient blobServiceClient;
+
+    public static class ContainerNames
+    {
+        public const string Publications = "publications";
+        public const string ProfilePictures = "profilepictures";
+    }
 
     public CloudStoredFileService(IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("AzureBlobStorage");
-        var blobServiceClient = new BlobServiceClient(connectionString);
-        containerClient = blobServiceClient.GetBlobContainerClient(ContainerName);
+        blobServiceClient = new BlobServiceClient(connectionString);
     }
 
-    public async Task InitializeContainerAsync()
+    public async Task InitializeContainersAsync()
     {
-        await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob);
+        var containerNames = new[] { ContainerNames.Publications, ContainerNames.ProfilePictures };
+
+        foreach (var name in containerNames)
+        {
+            var containerClient = blobServiceClient.GetBlobContainerClient(name);
+            await containerClient.CreateIfNotExistsAsync(PublicAccessType.Blob);
+        }
     }
 
-    public async Task<CloudStoredFile> UploadFileAsync(Stream fileStream, string fileName, string contentType)
+    public async Task<CloudStoredFile> UploadFileAsync(Stream fileStream, string fileName, string contentType, string containerName)
     {
-        await InitializeContainerAsync();
+        var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
 
         await using (fileStream)
         {
@@ -50,11 +60,18 @@ public class CloudStoredFileService : ICloudStoredFileService
 
     public async Task DeleteFileAsync(string fileUrl)
     {
-        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
-        {
-            var fileName = Path.GetFileName(uri.LocalPath);
-            var blobClient = containerClient.GetBlobClient(fileName);
-            await blobClient.DeleteIfExistsAsync();
-        }
+        if (!Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+            return;
+
+        var segments = uri.Segments;
+        if (segments.Length < 3)
+            return;
+
+        var containerName = segments[^2].TrimEnd('/');
+        var blobName = segments[^1];
+
+        var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+        var blobClient = containerClient.GetBlobClient(blobName);
+        await blobClient.DeleteIfExistsAsync();
     }
 }
