@@ -1,4 +1,4 @@
-﻿using AltWirePoint.BusinessLogic.Models;
+using AltWirePoint.BusinessLogic.Models;
 using AltWirePoint.BusinessLogic.Models.Publication;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
 using AltWirePoint.DataAccess.Enums;
@@ -40,7 +40,7 @@ public class PublicationService : IPublicationService
         {
             var uploadTasks = files.Select(async file =>
             {
-                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType);
+                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType, CloudStoredFileService.ContainerNames.Publications);
                 return storedFile;
             });
 
@@ -152,7 +152,7 @@ public class PublicationService : IPublicationService
         {
             var uploadTasks = files.Select(async file =>
             {
-                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType);
+                var storedFile = await cloudStoredFileService.UploadFileAsync(file.Content, file.FileName, file.ContentType, CloudStoredFileService.ContainerNames.Publications);
                 storedFile.PublicationId = commentEntity.Id;
                 return storedFile;
             });

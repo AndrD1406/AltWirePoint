@@ -1,4 +1,4 @@
-﻿using AltWirePoint.BusinessLogic.Models;
+using AltWirePoint.BusinessLogic.Models;
 using AltWirePoint.BusinessLogic.Models.Profile;
 using AltWirePoint.BusinessLogic.Models.Publication;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
@@ -96,20 +96,7 @@ public class PublicationController : ControllerBase
         return Ok(publicationsCount);
     }
 
-    [HttpGet]
-    [AllowAnonymous]
-    [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetUserById(Guid id)
-    {
-        var user = await userManager.FindByIdAsync(id.ToString());
-        if (user == null)
-            return NotFound();
 
-        var dto = mapper.Map<ProfileDto>(user);
-
-        return Ok(dto);
-    }
 
     [HttpPost]
     [Authorize]
