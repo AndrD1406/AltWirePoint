@@ -1,36 +1,45 @@
-﻿using AltWirePoint.BusinessLogic.Models.Identity;
+using AltWirePoint.BusinessLogic.Models.Identity;
 using AltWirePoint.BusinessLogic.Models.Profile;
+using AltWirePoint.BusinessLogic.Services;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
+using AltWirePoint.DataAccess;
 using AltWirePoint.DataAccess.Identity;
 using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
 namespace AltWirePoint.WebApi.Controllers;
 
 [AllowAnonymous]
-[Route("api/[controller]")]
+[Route("api/[controller]/[action]")]
 [ApiController]
 public class AccountController : ControllerBase
 {
     private readonly UserManager<ApplicationUser> userManager;
     private readonly SignInManager<ApplicationUser> signInManager;
     private readonly IJwtService jwtService;
+    private readonly ICloudStoredFileService cloudStoredFileService;
+    private readonly AltWirePointDbContext dbContext;
     private readonly IMapper mapper;
 
     public AccountController(UserManager<ApplicationUser> userManager,
-        SignInManager<ApplicationUser> signInManager, IJwtService jwtService, IMapper mapp)
+        SignInManager<ApplicationUser> signInManager, IJwtService jwtService,
+        ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext,
+        IMapper mapp)
     {
         this.userManager = userManager;
         this.signInManager = signInManager;
         this.jwtService = jwtService;
+        this.cloudStoredFileService = cloudStoredFileService;
+        this.dbContext = dbContext;
         mapper = mapp;
     }
 
-    [HttpPost("register")]
+    [HttpPost]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -68,7 +77,7 @@ public class AccountController : ControllerBase
         return Ok(false);
     }
 
-    [HttpPost("login")]
+    [HttpPost]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -105,7 +114,7 @@ public class AccountController : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("logout")]
+    [HttpPost]
     public async Task<IActionResult> Logout()
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -123,7 +132,7 @@ public class AccountController : ControllerBase
         return NoContent();
     }
 
-    [HttpPost("refresh")]
+    [HttpPost]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Refresh(TokenModel tokenModel)
@@ -161,7 +170,7 @@ public class AccountController : ControllerBase
         return Ok(authenticationResponse);
     }
 
-    [HttpPost("[action]")]
+    [HttpPost]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -187,11 +196,11 @@ public class AccountController : ControllerBase
         return NoContent();
     }
 
-    [HttpPut("[action]")]
+    [HttpPut]
     [Authorize]
     [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> EditProfile([FromBody] ProfileEditRequest request)
+    public async Task<IActionResult> EditProfile([FromForm] ProfileEditRequest request, IFormFile? profilePicture)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
@@ -200,16 +209,70 @@ public class AccountController : ControllerBase
         var user = await userManager.FindByIdAsync(userId);
         if (user == null) return NotFound();
 
-        if (!string.IsNullOrWhiteSpace(request.Name))
+        if (request != null && !string.IsNullOrWhiteSpace(request.Name))
             user.Name = request.Name;
-        if (!string.IsNullOrWhiteSpace(request.Logo))
-            user.Logo = request.Logo;
+
+        if (profilePicture != null && profilePicture.Length > 0)
+        {
+            if (!profilePicture.ContentType.StartsWith("image"))
+                return BadRequest("Only image files are allowed for profile pictures.");
+
+            var existingPfp = await dbContext.CloudStoredFiles
+                .FirstOrDefaultAsync(f => f.ApplicationUserId == user.Id);
+
+            if (existingPfp != null)
+            {
+                await cloudStoredFileService.DeleteFileAsync(existingPfp.Url);
+                dbContext.CloudStoredFiles.Remove(existingPfp);
+            }
+
+            var storedFile = await cloudStoredFileService.UploadFileAsync(
+                profilePicture.OpenReadStream(),
+                profilePicture.FileName,
+                profilePicture.ContentType,
+                CloudStoredFileService.ContainerNames.ProfilePictures);
+
+            storedFile.ApplicationUserId = user.Id;
+            dbContext.CloudStoredFiles.Add(storedFile);
+
+            await dbContext.SaveChangesAsync();
+        }
 
         var result = await userManager.UpdateAsync(user);
         if (!result.Succeeded)
             return BadRequest(result.Errors.Select(e => e.Description));
 
-        var profileDto = mapper.Map<ProfileDto>(user);
+        var profileDto = user.ToProfileDto();
         return Ok(profileDto);
+    }
+
+    [HttpGet("{userId}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetProfilePicture(Guid userId)
+    {
+        var file = await dbContext.CloudStoredFiles
+            .FirstOrDefaultAsync(f => f.ApplicationUserId == userId);
+
+        if (file == null)
+            return NotFound("No profile picture found for this user.");
+
+        return Ok(new { url = file.Url });
+    }
+
+    [HttpGet("{id}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetUserById(Guid id)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+        if (user == null)
+            return NotFound();
+
+        var dto = user.ToProfileDto();
+
+        return Ok(dto);
     }
 }

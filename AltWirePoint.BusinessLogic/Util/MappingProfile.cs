@@ -1,4 +1,4 @@
-﻿using AltWirePoint.BusinessLogic.Models;
+using AltWirePoint.BusinessLogic.Models;
 using AltWirePoint.BusinessLogic.Models.Identity;
 using AltWirePoint.BusinessLogic.Models.Profile;
 using AltWirePoint.BusinessLogic.Models.Publication;
@@ -24,13 +24,13 @@ public class MappingProfile : Profile
         CreateMap<Publication, PublicationDto>()
             .ForMember(dest => dest.FileUrls, opt => opt.MapFrom(src => src.CloudStoredFiles != null ? src.CloudStoredFiles.Select(f => f.Url) : null))
             .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.Author!.Name))
-            .ForMember(dest => dest.AuthorLogo, opt => opt.MapFrom(src => src.Author!.Logo));
+            .ForMember(dest => dest.AuthorLogo, opt => opt.MapFrom(src => src.Author!.ProfilePicture != null ? src.Author!.ProfilePicture.Url : null));
 
         CreateMap<Publication, CommentDto>()
             .ForMember(d => d.ParentId, opt => opt.MapFrom(p => p.ParentId!.Value))
             .ForMember(d => d.CreatedAt, opt => opt.MapFrom(p => p.CreatedAt))
             .ForMember(d => d.AuthorName, opt => opt.MapFrom(p => p.Author!.Name))
-            .ForMember(d => d.AuthorLogo, opt => opt.MapFrom(p => p.Author!.Logo))
+            .ForMember(d => d.AuthorLogo, opt => opt.MapFrom(p => p.Author!.ProfilePicture != null ? p.Author!.ProfilePicture.Url : null))
             .ForMember(d => d.FileUrls, opt => opt.MapFrom(p => p.CloudStoredFiles != null ? p.CloudStoredFiles.Select(f => f.Url) : null));
 
         CreateMap<Like, LikeDto>()
@@ -38,15 +38,6 @@ public class MappingProfile : Profile
                        opt => opt.MapFrom(src => src.PublicationId))
             .ForMember(dest => dest.AuthorName,
                        opt => opt.MapFrom(src => src.Author!.Name));
-
-        CreateMap<ApplicationUser, ProfileDto>()
-            .ForMember(d => d.UserId, o => o.MapFrom(u => u.Id))
-            .ForMember(d => d.Name, o => o.MapFrom(u => u.Name))
-            .ForMember(d => d.Logo, o => o.MapFrom(u => u.Logo))
-            .ForMember(d => d.PublicationIds, o => o.MapFrom(u =>
-                u.Publications != null
-                    ? u.Publications.Select(p => p.Id).ToList()
-                    : new List<Guid>()));
 
         CreateMap<CommentCreateRequest, Publication>()
             .ForMember(dest => dest.AuthorId, opt => opt.MapFrom(src => src.AuthorId))

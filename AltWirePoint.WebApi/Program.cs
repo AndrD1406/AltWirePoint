@@ -127,7 +127,7 @@ public class Program
             try
             {
                 var storageService = scope.ServiceProvider.GetRequiredService<ICloudStoredFileService>();
-                await storageService.InitializeContainerAsync();
+                await storageService.InitializeContainersAsync();
             }
             catch (Exception ex)
             {
