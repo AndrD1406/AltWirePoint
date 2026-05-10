@@ -1,4 +1,4 @@
-﻿namespace AltWirePoint.BusinessLogic.Models.Publication;
+namespace AltWirePoint.BusinessLogic.Models.Publication;
 
 public class PublicationDto
 {
@@ -14,9 +14,28 @@ public class PublicationDto
 
     public string? AuthorName { get; set; }
 
-    public string? AuthorLogo { get; set; }
+    public string? AuthorProfilePictureUrl { get; set; }
 
-    public List<LikeDto>? Likes { get; set; }
+    public int LikeCount { get; set; }
 
-    public List<CommentDto>? Comments { get; set; }
+    public int CommentCount { get; set; }
+
+    public bool IsLikedByCurrentUser { get; set; }
+}
+
+public static class PublicationDtoExtensions
+{
+    public static PublicationDto ToPublicationDto(this DataAccess.Models.Publication publication)
+    {
+        return new PublicationDto
+        {
+            Id = publication.Id,
+            Description = publication.Description,
+            CreatedAt = publication.CreatedAt,
+            AuthorId = publication.AuthorId,
+            FileUrls = publication.CloudStoredFiles?.Select(f => f.Url).ToList(),
+            AuthorName = publication.Author?.Name,
+            AuthorProfilePictureUrl = publication.Author?.ProfilePicture?.Url
+        };
+    }
 }

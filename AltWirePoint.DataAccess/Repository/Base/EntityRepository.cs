@@ -1,4 +1,4 @@
-﻿using AltWirePoint.DataAccess.Enums;
+using AltWirePoint.DataAccess.Enums;
 using AltWirePoint.DataAccess.Extensions;
 using AltWirePoint.DataAccess.Models;
 using Microsoft.EntityFrameworkCore;
@@ -186,7 +186,7 @@ public class EntityRepository<TKey, TEntity> : IEntityRepository<TKey, TEntity>
         if (skip > 0) query = query.Skip(skip);
         if (take > 0) query = query.Take(take);
 
-        return query;
+        return query.IncludeProperties(includeProperties);
     }
 
     public Task<int> SaveChangesAsync(

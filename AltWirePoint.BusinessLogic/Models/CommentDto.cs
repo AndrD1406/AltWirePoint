@@ -1,20 +1,26 @@
-﻿namespace AltWirePoint.BusinessLogic.Models;
+using AltWirePoint.BusinessLogic.Models.Publication;
 
-public class CommentDto
+namespace AltWirePoint.BusinessLogic.Models;
+
+public class CommentDto : PublicationDto
 {
-    public Guid Id { get; set; }
-
     public Guid ParentId { get; set; }
+}
 
-    public DateTime CreatedAt { get; set; }
-
-    public List<string>? FileUrls { get; set; }
-
-    public string Content { get; set; }
-
-    public Guid AuthorId { get; set; }
-
-    public string? AuthorName { get; set; }
-
-    public string? AuthorLogo { get; set; }
+public static class CommentDtoExtensions
+{
+    public static CommentDto ToCommentDto(this DataAccess.Models.Publication publication)
+    {
+        return new CommentDto
+        {
+            Id = publication.Id,
+            ParentId = publication.ParentId!.Value,
+            CreatedAt = publication.CreatedAt,
+            Description = publication.Description ?? string.Empty,
+            AuthorId = publication.AuthorId,
+            AuthorName = publication.Author!.UserName,
+            AuthorProfilePictureUrl = publication.Author?.ProfilePicture?.Url,
+            FileUrls = publication.CloudStoredFiles?.Select(f => f.Url).ToList() ?? new List<string>()
+        };
+    }
 }

@@ -1,4 +1,4 @@
-﻿using AltWirePoint.BusinessLogic.Models;
+using AltWirePoint.BusinessLogic.Models;
 using AltWirePoint.BusinessLogic.Models.Publication;
 
 namespace AltWirePoint.BusinessLogic.Services.Interfaces;
@@ -11,12 +11,12 @@ public interface IPublicationService
     Task Delete(Guid id);
     Task<LikeDto> GetLikeById(Guid id);
     Task<IEnumerable<LikeDto>> GetLikesForPublication(Guid publicationId);
-    Task<IEnumerable<CommentDto>> GetCommentsForPublication(Guid publicationId);
+    Task<IEnumerable<CommentDto>> GetCommentsForPublication(Guid publicationId, int skip, int take, Guid currentUserId);
     Task<int> GetPublicationCountByAuthor(Guid authorId);
     Task<IEnumerable<PublicationDto>> GetReplies(Guid parentId);
     Task<LikeDto> SetLike(Guid publicationId, Guid authorId);
-    Task<CommentDto> AddComment(CommentCreateRequest dto, IEnumerable<FileUploadDto> files);
-    Task<IEnumerable<PublicationDto>> Get(int skip, int take);
-    Task<IEnumerable<PublicationDto>> GetPublicationsByAuthorPaged(Guid authorId, int skip, int take);
-    Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount);
+    Task<CommentDto> CreateComment(CommentCreateRequest dto, IEnumerable<FileUploadDto> files);
+    Task<IEnumerable<PublicationDto>> Get(int skip, int take, Guid currentUserId);
+    Task<IEnumerable<PublicationDto>> GetPublicationsByAuthorPaged(Guid authorId, int skip, int take, Guid currentUserId);
+    Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount, Guid currentUserId);
 }
