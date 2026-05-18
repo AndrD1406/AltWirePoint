@@ -1,10 +1,8 @@
 using AltWirePoint.BusinessLogic.Models;
-using AltWirePoint.BusinessLogic.Models.Profile;
 using AltWirePoint.BusinessLogic.Models.Publication;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
 using AltWirePoint.DataAccess.Identity;
 using AltWirePoint.DataAccess.Models;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -18,12 +16,10 @@ public class PublicationController : ControllerBase
 {
     private readonly IPublicationService publicationService;
     private readonly UserManager<ApplicationUser> userManager;
-    private readonly IMapper mapper;
 
-    public PublicationController(IPublicationService publicationService, IMapper mapper, UserManager<ApplicationUser> userManager)
+    public PublicationController(IPublicationService publicationService, UserManager<ApplicationUser> userManager)
     {
         this.publicationService = publicationService;
-        this.mapper = mapper;
         this.userManager = userManager;
     }
 
@@ -62,7 +58,7 @@ public class PublicationController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    [ProducesResponseType(typeof(Publication), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PublicationDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id)
     {
@@ -126,7 +122,7 @@ public class PublicationController : ControllerBase
             }
         }
 
-        var comment = await publicationService.AddComment(request, fileDtos);
+        var comment = await publicationService.CreateComment(request, fileDtos);
 
         return CreatedAtAction(
             nameof(GetById),
@@ -142,7 +138,8 @@ public class PublicationController : ControllerBase
     [FromQuery] int skip = 0,
     [FromQuery] int take = 10)
     {
-        var page = await publicationService.Get(skip, take);
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId);
+        var page = await publicationService.Get(skip, take, currentUserId);
         return Ok(page);
     }
 
@@ -154,7 +151,8 @@ public class PublicationController : ControllerBase
         [FromQuery] int skip = 0,
         [FromQuery] int take = 10)
     {
-        var page = await publicationService.GetPublicationsByAuthorPaged(id, skip, take);
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId);
+        var page = await publicationService.GetPublicationsByAuthorPaged(id, skip, take, currentUserId);
         return Ok(page);
     }
 
@@ -162,7 +160,10 @@ public class PublicationController : ControllerBase
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<PublicationDto>), StatusCodes.Status200OK)]
     public Task<IEnumerable<PublicationDto>> Search(string query, int skipCount = 0, int maxResultCount = 10)
-    => publicationService.SearchAsync(query, skipCount, maxResultCount);
+    {
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId);
+        return publicationService.SearchAsync(query, skipCount, maxResultCount, currentUserId);
+    }
 
     [HttpPut]
     [Authorize]
@@ -184,9 +185,10 @@ public class PublicationController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<CommentDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<CommentDto>>> GetCommentsForPublication(Guid id)
+    public async Task<ActionResult<IEnumerable<CommentDto>>> GetCommentsForPublication(Guid id, int skip = 0, int take = 10)
     {
-        var comments = await publicationService.GetCommentsForPublication(id);
+        Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId);
+        var comments = await publicationService.GetCommentsForPublication(id, skip, take, currentUserId);
         return Ok(comments);
     }
 }
