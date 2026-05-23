@@ -1,4 +1,4 @@
-﻿using AltWirePoint.DataAccess.Extensions;
+using AltWirePoint.DataAccess.Extensions;
 using AltWirePoint.DataAccess.Identity;
 using AltWirePoint.DataAccess.Models;
 using Microsoft.AspNetCore.Identity;
@@ -16,6 +16,10 @@ public partial class AltWirePointDbContext : IdentityDbContext<ApplicationUser, 
     public virtual DbSet<PermissionsForRole> PermissionsForRoles { get; set; }
 
     public virtual DbSet<CloudStoredFile> CloudStoredFiles { get; set; }
+
+    public virtual DbSet<Chat> Chats { get; set; }
+
+    public virtual DbSet<Message> Messages { get; set; }
 
     public AltWirePointDbContext(DbContextOptions<AltWirePointDbContext> options)
         : base(options)

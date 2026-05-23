@@ -1,6 +1,5 @@
 using AltWirePoint.BusinessLogic.Models;
 using AltWirePoint.BusinessLogic.Models.Identity;
-using AltWirePoint.BusinessLogic.Models.Profile;
 using AltWirePoint.BusinessLogic.Models.Publication;
 using AltWirePoint.DataAccess.Identity;
 using AltWirePoint.DataAccess.Models;
@@ -20,8 +19,6 @@ public class MappingProfile : Profile
 
         CreateMap<PublicationCreateRequest, Publication>()
             .ForMember(dest => dest.ParentId, opt => opt.Ignore());
-
-
 
         CreateMap<Like, LikeDto>()
             .ForMember(dest => dest.PublicationId,

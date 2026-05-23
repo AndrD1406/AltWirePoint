@@ -6,6 +6,7 @@ using AltWirePoint.Common.PermissionModule.PolicyClasses;
 using AltWirePoint.DataAccess;
 using AltWirePoint.DataAccess.Identity;
 using AltWirePoint.DataAccess.Repository.Base;
+using AltWirePoint.BusinessLogic.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -58,9 +59,12 @@ public class Program
         builder.Services.AddSingleton<IAuthorizationHandler, PermissionHandler>();
 
         #region Services
+        builder.Services.AddSignalR();
+
         builder.Services.AddTransient<IJwtService, JwtService>();
         builder.Services.AddScoped<ICloudStoredFileService, CloudStoredFileService>();
         builder.Services.AddScoped<IPublicationService, PublicationService>();
+        builder.Services.AddScoped<IChatService, ChatService>();
         #endregion
 
         builder.Services.AddAutoMapper(typeof(MappingProfile));
@@ -83,6 +87,21 @@ public class Program
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
                 ClockSkew = TimeSpan.Zero
+            };
+
+            // Allow SignalR to receive the JWT token from the query string
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chathub"))
+                    {
+                        context.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                }
             };
         });
 
@@ -151,6 +170,7 @@ public class Program
         app.UseAuthorization();
 
         app.MapControllers();
+        app.MapHub<ChatHub>("/chathub");
 
         app.Run();
     }
