@@ -25,4 +25,9 @@ public class CloudStoredFile
     public Guid? ApplicationUserId { get; set; }
 
     public virtual ApplicationUser? ApplicationUser { get; set; }
+
+    [ForeignKey(nameof(Message))]
+    public Guid? MessageId { get; set; }
+
+    public virtual Message? Message { get; set; }
 }

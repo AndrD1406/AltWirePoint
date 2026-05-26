@@ -14,6 +14,7 @@ public class CloudStoredFileService : ICloudStoredFileService
     {
         public const string Publications = "publications";
         public const string ProfilePictures = "profilepictures";
+        public const string Messages = "messages";
     }
 
     public CloudStoredFileService(IConfiguration configuration)
@@ -24,7 +25,7 @@ public class CloudStoredFileService : ICloudStoredFileService
 
     public async Task InitializeContainersAsync()
     {
-        var containerNames = new[] { ContainerNames.Publications, ContainerNames.ProfilePictures };
+        var containerNames = new[] { ContainerNames.Publications, ContainerNames.ProfilePictures, ContainerNames.Messages };
 
         foreach (var name in containerNames)
         {
@@ -43,7 +44,7 @@ public class CloudStoredFileService : ICloudStoredFileService
             var fileType = contentType.StartsWith("image") ? DataAccess.Enums.FileType.Image : DataAccess.Enums.FileType.Video;
             
             string blobPath = "";
-            if (containerName == ContainerNames.Publications)
+            if (containerName == ContainerNames.Publications || containerName == ContainerNames.Messages)
             {
                 var folder = fileType == DataAccess.Enums.FileType.Image ? "images" : "videos";
                 blobPath = $"{folder}/";
