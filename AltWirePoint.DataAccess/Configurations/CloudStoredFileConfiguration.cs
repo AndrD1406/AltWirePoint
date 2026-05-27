@@ -16,11 +16,11 @@ public class CloudStoredFileConfiguration : IEntityTypeConfiguration<CloudStored
         builder.HasOne(f => f.Publication)
                .WithMany(p => p.CloudStoredFiles)
                .HasForeignKey(f => f.PublicationId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(f => f.ApplicationUser)
                .WithOne(u => u.ProfilePicture)
                .HasForeignKey<CloudStoredFile>(f => f.ApplicationUserId)
-               .OnDelete(DeleteBehavior.Cascade);
+               .OnDelete(DeleteBehavior.Restrict);
     }
 }

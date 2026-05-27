@@ -34,8 +34,8 @@ public partial class AltWirePointDbContext : IdentityDbContext<ApplicationUser, 
     {
         if (!optionsBuilder.IsConfigured)
         {
-            optionsBuilder.UseNpgsql(
-                "Host=localhost;Port=5432;Database=AltWirePointDb;Username=postgres;Password=1234"
+            optionsBuilder.UseSqlServer(
+                "Server=(localdb)\\MSSQLLocalDB;Database=AltWirePointDb;Trusted_Connection=True;TrustServerCertificate=True;"
             );
         }
     }

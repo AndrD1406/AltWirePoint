@@ -1,7 +1,6 @@
 using AltWirePoint.BusinessLogic.Models.Identity;
 using AltWirePoint.BusinessLogic.Services;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
-using AltWirePoint.BusinessLogic.Util;
 using AltWirePoint.Common.PermissionModule.PolicyClasses;
 using AltWirePoint.DataAccess;
 using AltWirePoint.DataAccess.Identity;
@@ -35,7 +34,9 @@ public class Program
         });
 
         builder.Services.AddDbContext<AltWirePointDbContext>(options =>
-            options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+            options.UseSqlServer(
+                builder.Configuration.GetConnectionString("DefaultConnection"),
+                sqlOptions => sqlOptions.EnableRetryOnFailure())
                    .UseLazyLoadingProxies());
 
         builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -66,8 +67,6 @@ public class Program
         builder.Services.AddScoped<IPublicationService, PublicationService>();
         builder.Services.AddScoped<IChatService, ChatService>();
         #endregion
-
-        builder.Services.AddAutoMapper(typeof(MappingProfile));
 
         builder.Services.AddAuthentication(options =>
         {
@@ -143,6 +142,7 @@ public class Program
 
         using (var scope = app.Services.CreateScope())
         {
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
             try
             {
                 var storageService = scope.ServiceProvider.GetRequiredService<ICloudStoredFileService>();
@@ -150,9 +150,23 @@ public class Program
             }
             catch (Exception ex)
             {
-                var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
                 logger.LogError(ex, "An error occurred while initializing Azure Blob Storage.");
+            }
 
+            try
+            {
+                logger.LogInformation("Applying database migrations...");
+                var dbContext = scope.ServiceProvider.GetRequiredService<AltWirePointDbContext>();
+                await dbContext.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied successfully.");
+
+                logger.LogInformation("Seeding users...");
+                await DataAccess.Extensions.DatabaseSeeder.SeedUsersAsync(scope.ServiceProvider);
+                logger.LogInformation("User seeding completed successfully.");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while migrating or seeding the database.");
             }
         }
 

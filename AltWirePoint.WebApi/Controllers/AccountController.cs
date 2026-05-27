@@ -4,7 +4,6 @@ using AltWirePoint.BusinessLogic.Services;
 using AltWirePoint.BusinessLogic.Services.Interfaces;
 using AltWirePoint.DataAccess;
 using AltWirePoint.DataAccess.Identity;
-using AutoMapper;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -24,20 +23,18 @@ public class AccountController : ControllerBase
     private readonly IJwtService jwtService;
     private readonly ICloudStoredFileService cloudStoredFileService;
     private readonly AltWirePointDbContext dbContext;
-    private readonly IMapper mapper;
 
     public AccountController(UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager, IJwtService jwtService,
-        ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext,
-        IMapper mapp)
+        ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext)
     {
         this.userManager = userManager;
         this.signInManager = signInManager;
         this.jwtService = jwtService;
         this.cloudStoredFileService = cloudStoredFileService;
         this.dbContext = dbContext;
-        mapper = mapp;
     }
+
 
     [HttpPost]
     [ProducesResponseType(typeof(AuthenticationResponse), StatusCodes.Status200OK)]
@@ -47,7 +44,7 @@ public class AccountController : ControllerBase
     {
         if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        var user = mapper.Map<ApplicationUser>(registerRequest);
+        var user = registerRequest.ToApplicationUser();
 
         var result = await userManager.CreateAsync(user, registerRequest.Password);
 
