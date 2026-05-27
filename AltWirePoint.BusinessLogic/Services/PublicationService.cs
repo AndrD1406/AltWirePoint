@@ -4,7 +4,6 @@ using AltWirePoint.BusinessLogic.Services.Interfaces;
 using AltWirePoint.DataAccess.Enums;
 using AltWirePoint.DataAccess.Models;
 using AltWirePoint.DataAccess.Repository.Base;
-using AutoMapper;
 using Microsoft.EntityFrameworkCore;
 using System.Linq.Expressions;
 
@@ -15,23 +14,20 @@ public class PublicationService : IPublicationService
     private readonly IEntityRepository<Guid, Publication> publicationRepository;
     private readonly IEntityRepository<Guid, Like> likeRepository;
     private readonly ICloudStoredFileService cloudStoredFileService;
-    private readonly IMapper mapper;
 
     public PublicationService(
         IEntityRepository<Guid, Publication> publicationRepository,
         IEntityRepository<Guid, Like> likeRepository,
-        ICloudStoredFileService cloudStoredFileService,
-        IMapper mapper)
+        ICloudStoredFileService cloudStoredFileService)
     {
         this.publicationRepository = publicationRepository;
         this.likeRepository = likeRepository;
         this.cloudStoredFileService = cloudStoredFileService;
-        this.mapper = mapper;
     }
 
     public async Task<PublicationDto> Create(PublicationCreateRequest request, Guid authorId, IEnumerable<FileUploadDto> files)
     {
-        var publication = mapper.Map<Publication>(request);
+        var publication = request.ToPublication();
         publication.AuthorId = authorId;
         publication.CreatedAt = DateTime.UtcNow;
         publication.CloudStoredFiles = new List<CloudStoredFile>();
@@ -62,14 +58,14 @@ public class PublicationService : IPublicationService
     public async Task<LikeDto> GetLikeById(Guid id)
     {
         var like = await likeRepository.GetById(id);
-        return mapper.Map<LikeDto>(like);
+        return like.ToLikeDto();
     }
 
     public async Task<IEnumerable<LikeDto>> GetLikesForPublication(Guid publicationId)
     {
         var likes = await likeRepository
             .GetByFilter(l => l.PublicationId == publicationId).ToListAsync();
-        return mapper.Map<IEnumerable<LikeDto>>(likes);
+        return likes.ToLikeDtos();
     }
 
     public async Task<IEnumerable<CommentDto>> GetCommentsForPublication(Guid publicationId, int skip, int take, Guid currentUserId)
@@ -122,7 +118,7 @@ public class PublicationService : IPublicationService
     public async Task<PublicationDto> Update(Guid id, PublicationCreateRequest dto)
     {
         var existing = await publicationRepository.GetById(id);
-        mapper.Map(dto, existing);
+        dto.ApplyTo(existing);
         var updated = await publicationRepository.Update(existing);
         return updated.ToPublicationDto();
     }
@@ -153,7 +149,7 @@ public class PublicationService : IPublicationService
         {
             existing.IsLiked = !existing.IsLiked;
             var updated = await likeRepository.Update(existing);
-            return mapper.Map<LikeDto>(updated);
+            return updated.ToLikeDto();
         }
 
         var like = new Like
@@ -164,15 +160,15 @@ public class PublicationService : IPublicationService
         };
 
         var created = await likeRepository.Create(like);
-        return mapper.Map<LikeDto>(created);
+        return created.ToLikeDto();
     }
 
     public async Task<IEnumerable<LikeDto>> GetAllLikes()
-    => mapper.Map<IEnumerable<LikeDto>>(await likeRepository.Get().ToListAsync());
+    => (await likeRepository.Get().ToListAsync()).ToLikeDtos();
 
     public async Task<CommentDto> CreateComment(CommentCreateRequest request, IEnumerable<FileUploadDto> files)
     {
-        var commentEntity = mapper.Map<Publication>(request);
+        var commentEntity = request.ToPublication();
         commentEntity.CloudStoredFiles = new List<CloudStoredFile>();
 
         if (files != null)
@@ -244,7 +240,7 @@ public class PublicationService : IPublicationService
                 skip: skipCount,
                 take: maxResultCount,
                 includeProperties: "Author.ProfilePicture,CloudStoredFiles",
-                whereExpression: p => p.Description != null && EF.Functions.ILike(p.Description, searchPattern),
+                whereExpression: p => p.Description != null && EF.Functions.Like(p.Description, searchPattern),
                 orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
                     (p => p.CreatedAt, SortDirection.Descending)

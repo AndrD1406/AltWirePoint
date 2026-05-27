@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+using AltWirePoint.DataAccess.Identity;
+using System.ComponentModel.DataAnnotations;
 
 namespace AltWirePoint.BusinessLogic.Models.Identity;
 
@@ -23,4 +24,19 @@ public class RegisterRequest
     [Required(ErrorMessage = "Confirm Password can't be blank")]
     [System.ComponentModel.DataAnnotations.Compare("Password", ErrorMessage = "Password and confirm password do not match")]
     public string ConfirmPassword { get; set; } = string.Empty;
+}
+
+public static class RegisterRequestExtensions
+{
+    public static ApplicationUser ToApplicationUser(this RegisterRequest request)
+    {
+        return new ApplicationUser
+        {
+            Name = request.UserName,
+            Email = request.Email,
+            PhoneNumber = request.PhoneNumber,
+            UserName = request.Email,
+            Role = "User"
+        };
+    }
 }
