@@ -20,4 +20,8 @@ public class ApplicationUser : IdentityUser<Guid>
     public virtual List<Like>? Likes { get; set; }
 
     public virtual CloudStoredFile? ProfilePicture { get; set; }
+
+    public virtual List<UserFollow>? Followers { get; set; }
+
+    public virtual List<UserFollow>? Following { get; set; }
 }

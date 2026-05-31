@@ -21,6 +21,8 @@ public partial class AltWirePointDbContext : IdentityDbContext<ApplicationUser, 
 
     public virtual DbSet<Message> Messages { get; set; }
 
+    public virtual DbSet<UserFollow> UserFollows { get; set; }
+
     public AltWirePointDbContext(DbContextOptions<AltWirePointDbContext> options)
         : base(options)
     {

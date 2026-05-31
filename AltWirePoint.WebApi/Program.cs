@@ -66,6 +66,7 @@ public class Program
         builder.Services.AddScoped<ICloudStoredFileService, CloudStoredFileService>();
         builder.Services.AddScoped<IPublicationService, PublicationService>();
         builder.Services.AddScoped<IChatService, ChatService>();
+        builder.Services.AddScoped<IFollowService, FollowService>();
         #endregion
 
         builder.Services.AddAuthentication(options =>

@@ -8,6 +8,9 @@ public class ProfileDto
     public string Name { get; set; } = default!;
     public string? ProfilePictureUrl { get; set; }
     public int? PublicationsCount { get; set; }
+    public int FollowerCount { get; set; }
+    public int FollowingCount { get; set; }
+    public bool IsFollowedByCurrentUser { get; set; }
 }
 
 public static class ProfileDtoExtensions
@@ -21,4 +24,4 @@ public static class ProfileDtoExtensions
             ProfilePictureUrl = user.ProfilePicture?.Url
         };
     }
-}
+}

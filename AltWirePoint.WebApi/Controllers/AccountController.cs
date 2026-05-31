@@ -23,16 +23,19 @@ public class AccountController : ControllerBase
     private readonly IJwtService jwtService;
     private readonly ICloudStoredFileService cloudStoredFileService;
     private readonly AltWirePointDbContext dbContext;
+    private readonly IFollowService followService;
 
     public AccountController(UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager, IJwtService jwtService,
-        ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext)
+        ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext,
+        IFollowService followService)
     {
         this.userManager = userManager;
         this.signInManager = signInManager;
         this.jwtService = jwtService;
         this.cloudStoredFileService = cloudStoredFileService;
         this.dbContext = dbContext;
+        this.followService = followService;
     }
 
 
@@ -269,6 +272,17 @@ public class AccountController : ControllerBase
             return NotFound();
 
         var dto = user.ToProfileDto();
+
+        var stats = await followService.GetFollowStats(id);
+        dto.FollowerCount = stats.FollowerCount;
+        dto.FollowingCount = stats.FollowingCount;
+
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (currentUserId != null)
+        {
+            dto.IsFollowedByCurrentUser = await followService.IsFollowing(
+                Guid.Parse(currentUserId), id);
+        }
 
         return Ok(dto);
     }
