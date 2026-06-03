@@ -18,5 +18,5 @@ public interface IPublicationService
     Task<CommentDto> CreateComment(CommentCreateRequest dto, IEnumerable<FileUploadDto> files);
     Task<IEnumerable<PublicationDto>> Get(int skip, int take, Guid currentUserId);
     Task<IEnumerable<PublicationDto>> GetPublicationsByAuthorPaged(Guid authorId, int skip, int take, Guid currentUserId);
-    Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount, Guid currentUserId);
+    Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount, Guid currentUserId, string sortBy = "latest");
 }

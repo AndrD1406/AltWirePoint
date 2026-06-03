@@ -43,12 +43,12 @@ public class ChatController : ControllerBase
     /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<ChatDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetChats()
+    public async Task<IActionResult> GetChats([FromQuery] int skip = 0, [FromQuery] int take = 20)
     {
         var userId = GetCurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var Chats = await chatService.GetChatsForUser(userId.Value);
+        var Chats = await chatService.GetChatsForUser(userId.Value, skip, take);
         return Ok(Chats);
     }
 

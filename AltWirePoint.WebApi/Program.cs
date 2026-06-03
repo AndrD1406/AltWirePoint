@@ -67,6 +67,7 @@ public class Program
         builder.Services.AddScoped<IPublicationService, PublicationService>();
         builder.Services.AddScoped<IChatService, ChatService>();
         builder.Services.AddScoped<IFollowService, FollowService>();
+        builder.Services.AddScoped<IModerationService, ModerationService>();
         #endregion
 
         builder.Services.AddAuthentication(options =>
@@ -182,6 +183,7 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAuthentication();
+        app.UseMiddleware<AltWirePoint.WebApi.Middleware.UserBanMiddleware>();
         app.UseAuthorization();
 
         app.MapControllers();

@@ -52,6 +52,10 @@ public class PublicationService : IPublicationService
     {
         var publication = await publicationRepository.GetByIdWithDetails(id, 
             includeProperties: "Author.ProfilePicture,CloudStoredFiles");
+            
+        if (publication == null || publication.IsHidden)
+            return null;
+            
         return publication.ToPublicationDto();
     }
 
@@ -73,7 +77,7 @@ public class PublicationService : IPublicationService
         var comments = await publicationRepository
             .Get(skip, take, 
                  includeProperties: "Author.ProfilePicture,CloudStoredFiles", 
-                 whereExpression: p => p.ParentId == publicationId,
+                 whereExpression: p => p.ParentId == publicationId && !p.IsHidden,
                  orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                  {
                      (p => p.CreatedAt, SortDirection.Ascending)
@@ -104,13 +108,13 @@ public class PublicationService : IPublicationService
 
     public async Task<int> GetPublicationCountByAuthor(Guid authorId)
     {
-        return await publicationRepository.Count(p => p.AuthorId == authorId && p.ParentId == null);
+        return await publicationRepository.Count(p => p.AuthorId == authorId && p.ParentId == null && !p.IsHidden);
     }
 
     public async Task<IEnumerable<PublicationDto>> GetReplies(Guid parentId)
     {
         var replies = await publicationRepository
-            .GetByFilter(p => p.ParentId == parentId)
+            .GetByFilter(p => p.ParentId == parentId && !p.IsHidden)
             .AsNoTracking().ToListAsync();
         return replies.Select(r => r.ToPublicationDto());
     }
@@ -140,27 +144,33 @@ public class PublicationService : IPublicationService
 
     public async Task<LikeDto> SetLike(Guid publicationId, Guid authorId)
     {
-        var existing = (await likeRepository.Get().ToListAsync())
-            .FirstOrDefault(l
-                => l.PublicationId == publicationId
-                && l.AuthorId == authorId);
+        var existing = await likeRepository
+            .GetByFilter(l => l.PublicationId == publicationId && l.AuthorId == authorId)
+            .FirstOrDefaultAsync();
+
+        LikeDto result;
 
         if (existing != null)
         {
             existing.IsLiked = !existing.IsLiked;
             var updated = await likeRepository.Update(existing);
-            return updated.ToLikeDto();
+            result = updated.ToLikeDto();
+        }
+        else
+        {
+            var like = new Like
+            {
+                PublicationId = publicationId,
+                AuthorId = authorId,
+                IsLiked = true
+            };
+
+            var created = await likeRepository.Create(like);
+            result = created.ToLikeDto();
         }
 
-        var like = new Like
-        {
-            PublicationId = publicationId,
-            AuthorId = authorId,
-            IsLiked = true
-        };
-
-        var created = await likeRepository.Create(like);
-        return created.ToLikeDto();
+        await RecalculateEngagementScore(publicationId);
+        return result;
     }
 
     public async Task<IEnumerable<LikeDto>> GetAllLikes()
@@ -186,6 +196,12 @@ public class PublicationService : IPublicationService
 
         var created = await publicationRepository.Create(commentEntity);
 
+        // Recalculate parent's engagement score
+        if (commentEntity.ParentId.HasValue)
+        {
+            await RecalculateEngagementScore(commentEntity.ParentId.Value);
+        }
+
         var createdWithIncludes = await publicationRepository
             .GetByIdWithDetails(created.Id, includeProperties: "Author.ProfilePicture,CloudStoredFiles");
 
@@ -199,9 +215,10 @@ public class PublicationService : IPublicationService
                 skip: skip,
                 take: take,
                 includeProperties: "Author.ProfilePicture,CloudStoredFiles",
-                whereExpression: p => p.ParentId == null,
+                whereExpression: p => p.ParentId == null && !p.IsHidden,
                 orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
+                    (p => p.EngagementScore, SortDirection.Descending),
                     (p => p.CreatedAt, SortDirection.Descending)
                 }
             )
@@ -219,7 +236,7 @@ public class PublicationService : IPublicationService
                 skip: skip,
                 take: take,
                 includeProperties: "Author.ProfilePicture,CloudStoredFiles",
-                whereExpression: p => p.ParentId == null && p.AuthorId == authorId,
+                whereExpression: p => p.ParentId == null && p.AuthorId == authorId && !p.IsHidden,
                 orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
                 {
                     (p => p.CreatedAt, SortDirection.Descending)
@@ -231,20 +248,27 @@ public class PublicationService : IPublicationService
         return await MapWithLikesAndComments(pageEntities, currentUserId);
     }
 
-    public async Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount, Guid currentUserId)
+    public async Task<IEnumerable<PublicationDto>> SearchAsync(string query, int skipCount, int maxResultCount, Guid currentUserId, string sortBy = "latest")
     {
-        var searchPattern = $"%{query}";
+        var searchPattern = $"%{query}%";
+
+        var orderBy = sortBy == "top"
+            ? new List<(Expression<Func<Publication, object>>, SortDirection)>
+              {
+                  (p => p.EngagementScore, SortDirection.Descending)
+              }
+            : new List<(Expression<Func<Publication, object>>, SortDirection)>
+              {
+                  (p => p.CreatedAt, SortDirection.Descending)
+              };
 
         var entities = await publicationRepository
             .Get(
                 skip: skipCount,
                 take: maxResultCount,
                 includeProperties: "Author.ProfilePicture,CloudStoredFiles",
-                whereExpression: p => p.Description != null && EF.Functions.Like(p.Description, searchPattern),
-                orderBy: new List<(Expression<Func<Publication, object>>, SortDirection)>
-                {
-                    (p => p.CreatedAt, SortDirection.Descending)
-                }
+                whereExpression: p => !p.IsHidden && p.ParentId == null && p.Description != null && EF.Functions.Like(p.Description, searchPattern),
+                orderBy: orderBy
             )
             .AsNoTracking()
             .ToListAsync();
@@ -284,6 +308,16 @@ public class PublicationService : IPublicationService
 
         return dtos;
     }
+
+    private async Task RecalculateEngagementScore(Guid publicationId)
+    {
+        var publication = await publicationRepository.GetById(publicationId);
+        if (publication == null) return;
+
+        var likeCount = await likeRepository.Count(l => l.PublicationId == publicationId && l.IsLiked);
+        var commentCount = await publicationRepository.Count(p => p.ParentId == publicationId);
+
+        publication.EngagementScore = (likeCount * 2) + (commentCount * 3);
+        await publicationRepository.Update(publication);
+    }
 }
-
-

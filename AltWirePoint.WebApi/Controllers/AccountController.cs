@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using AltWirePoint.BusinessLogic.Models.Moderation;
 
 namespace AltWirePoint.WebApi.Controllers;
 
@@ -24,11 +25,12 @@ public class AccountController : ControllerBase
     private readonly ICloudStoredFileService cloudStoredFileService;
     private readonly AltWirePointDbContext dbContext;
     private readonly IFollowService followService;
+    private readonly IModerationService moderationService;
 
     public AccountController(UserManager<ApplicationUser> userManager,
         SignInManager<ApplicationUser> signInManager, IJwtService jwtService,
         ICloudStoredFileService cloudStoredFileService, AltWirePointDbContext dbContext,
-        IFollowService followService)
+        IFollowService followService, IModerationService moderationService)
     {
         this.userManager = userManager;
         this.signInManager = signInManager;
@@ -36,6 +38,7 @@ public class AccountController : ControllerBase
         this.cloudStoredFileService = cloudStoredFileService;
         this.dbContext = dbContext;
         this.followService = followService;
+        this.moderationService = moderationService;
     }
 
 
@@ -285,5 +288,51 @@ public class AccountController : ControllerBase
         }
 
         return Ok(dto);
+    }
+
+    [HttpGet("ban-status/{userId}")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(BanStatusDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetBanStatus(Guid userId)
+    {
+        var status = await moderationService.GetBanStatusAsync(userId);
+        return Ok(status);
+    }
+
+    [HttpGet]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IEnumerable<ProfileDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> SearchUsers(string query, int skip = 0, int take = 10)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return Ok(Enumerable.Empty<ProfileDto>());
+
+        var users = await dbContext.Users
+            .Where(u => u.Name != null && EF.Functions.Like(u.Name, $"%{query}%"))
+            .OrderBy(u => u.Name)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        var dtos = new List<ProfileDto>();
+        foreach (var user in users)
+        {
+            var dto = user.ToProfileDto();
+            var stats = await followService.GetFollowStats(user.Id);
+            dto.FollowerCount = stats.FollowerCount;
+            dto.FollowingCount = stats.FollowingCount;
+
+            if (currentUserId != null)
+            {
+                dto.IsFollowedByCurrentUser = await followService.IsFollowing(
+                    Guid.Parse(currentUserId), user.Id);
+            }
+
+            dtos.Add(dto);
+        }
+
+        return Ok(dtos);
     }
 }

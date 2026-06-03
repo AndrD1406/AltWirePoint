@@ -159,10 +159,11 @@ public class PublicationController : ControllerBase
     [HttpGet]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IEnumerable<PublicationDto>), StatusCodes.Status200OK)]
-    public Task<IEnumerable<PublicationDto>> Search(string query, int skipCount = 0, int maxResultCount = 10)
+    public async Task<IActionResult> Search(string query, string sortBy = "latest", int skipCount = 0, int maxResultCount = 10)
     {
         Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var currentUserId);
-        return publicationService.SearchAsync(query, skipCount, maxResultCount, currentUserId);
+        var results = await publicationService.SearchAsync(query, skipCount, maxResultCount, currentUserId, sortBy);
+        return Ok(results);
     }
 
     [HttpPut]

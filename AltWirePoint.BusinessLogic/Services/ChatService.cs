@@ -74,7 +74,7 @@ public class ChatService : IChatService
         return await MapToChatDto(chat, creatorId);
     }
 
-    public async Task<IEnumerable<ChatDto>> GetChatsForUser(Guid userId)
+    public async Task<IEnumerable<ChatDto>> GetChatsForUser(Guid userId, int skip = 0, int take = 20)
     {
         var chats = await chatRepository
             .GetByFilter(
@@ -83,6 +83,9 @@ public class ChatService : IChatService
                     .Include(c => c.Participants).ThenInclude(p => p.ProfilePicture)
                     .Include(c => c.Messages.OrderByDescending(m => m.SentAt).Take(1))
                         .ThenInclude(m => m.Sender).ThenInclude(s => s.ProfilePicture))
+            .OrderByDescending(c => c.Messages.OrderByDescending(m => m.SentAt).Select(m => (DateTime?)m.SentAt).FirstOrDefault() ?? c.CreatedAt)
+            .Skip(skip)
+            .Take(take)
             .AsNoTracking()
             .ToListAsync();
 
@@ -92,8 +95,7 @@ public class ChatService : IChatService
             dtos.Add(await MapToChatDto(chat, userId));
         }
 
-        // Order by last message time (most recent first), then by creation date
-        return dtos.OrderByDescending(c => c.LastMessage?.SentAt ?? c.CreatedAt);
+        return dtos;
     }
 
     public async Task<IEnumerable<Guid>> GetChatIdsForUser(Guid userId)

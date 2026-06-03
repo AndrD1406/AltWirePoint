@@ -13,7 +13,7 @@ public interface IChatService
     /// <summary>
     /// Gets all Chats for a user, ordered by most recent message.
     /// </summary>
-    Task<IEnumerable<ChatDto>> GetChatsForUser(Guid userId);
+    Task<IEnumerable<ChatDto>> GetChatsForUser(Guid userId, int skip = 0, int take = 20);
 
     /// <summary>
     /// Gets just the Chat IDs for a user (used by the Hub on connect).

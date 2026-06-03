@@ -1,4 +1,4 @@
-﻿using AltWirePoint.DataAccess.Identity;
+using AltWirePoint.DataAccess.Identity;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -30,4 +30,8 @@ public class Publication : IKeyedEntity<Guid>
     public virtual List<Publication> Comments { get; set; } = new List<Publication>();
 
     public virtual List<CloudStoredFile>? CloudStoredFiles { get; set; }
+
+    public bool IsHidden { get; set; } = false;
+
+    public int EngagementScore { get; set; } = 0;
 }
